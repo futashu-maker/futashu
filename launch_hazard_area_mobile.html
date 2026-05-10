@@ -51,13 +51,13 @@ input[type="range"]{width:100%;}.chips{display:flex;gap:8px;flex-wrap:wrap;}
 <div class="section"><div class="section-title">Time</div>
 <div class="filter-row"><label for="startDate">Start date</label><input type="date" id="startDate"></div>
 <div class="filter-row"><label for="endDate">End date</label><input type="date" id="endDate"></div>
-<div class="filter-row"><label for="timeSlider">Time slider</label><input type="range" id="timeSlider" min="0" max="0" value="0"><div id="timeSliderLabel" class="hint">No date data</div><button class="secondary-button" type="button" onclick="applyTimeSlider()">Show selected day</button></div></div>
-<div class="section"><div class="section-title">Search & type</div>
+<div class="filter-row"><label for="timeSlider">Time slider</label><input type="range" id="timeSlider" min="0" max="0" value="0"><div id="timeSliderLabel" class="hint">No date data</div><button class="secondary-button" type="button" onclick="applyTimeSlider()">Show selected data date</button></div></div>
+<div class="section"><div class="section-title">Search by Warning ID</div>
 <div class="filter-row"><label for="warningIdFilter">Warning ID</label><input type="text" id="warningIdFilter" placeholder="例: 23-0419 または 0419"></div>
-<div class="filter-row"><label>Type</label><div class="chips"><label class="chip"><input type="checkbox" id="typeRocket" checked> ROCKET</label><label class="chip"><input type="checkbox" id="typeDebris" checked> SPACE_DEBRIS</label></div></div></div>
+</div>
 <div class="section"><div class="section-title">Area guard</div><div class="filter-row"><label for="maxAreaKm2">Max polygon area (km²)</label><input type="number" id="maxAreaKm2" value="1000000" min="0" step="100000"><label class="chip" style="margin-top: 8px;"><input type="checkbox" id="enableAreaFilter" checked> Hide over limit</label></div></div>
 <div class="button-row"><button class="primary-button" onclick="applyFilters()">Apply</button><button class="secondary-button" onclick="resetFilters()">Reset</button></div>
-<div class="count" id="visibleCount"></div><div class="hint">Map display: Leaflet / OSM. Area values: Equal Earth projection. Polygons repeat at ±360° longitude for east-west scrolling.</div>
+<div class="count" id="visibleCount"></div><div class="hint">Map display: Leaflet / OSM. Area values: Equal Earth projection. Time slider selects only dates that exist in the data.</div>
 </div></div>
 
 <div id="detailSheet" class="bottom-sheet detail-sheet">
@@ -86,7 +86,18 @@ function hideDetailSheet(){detailSheet.classList.remove("open");setTimeout(()=>m
 function toggleDetailSheet(){detailSheet.classList.contains("open")?hideDetailSheet():showDetailSheet();}
 function parseDateOrNull(s){if(!s)return null;const d=new Date(s+"T00:00:00Z");return isNaN(d.getTime())?null:d;}
 function dateToIso(d){return d.toISOString().slice(0,10);}
-function daysBetweenInclusive(startDate,endDate){const days=[];const d=new Date(startDate.getTime());while(d<=endDate){days.push(dateToIso(d));d.setUTCDate(d.getUTCDate()+1);}return days;}
+function collectAvailableDataDates(){
+  const dateSet = new Set();
+  for(const item of polygonData){
+    if(item.start_date && !isNaN(new Date(item.start_date + "T00:00:00Z").getTime())){
+      dateSet.add(item.start_date);
+    }
+    if(item.end_date && !isNaN(new Date(item.end_date + "T00:00:00Z").getTime())){
+      dateSet.add(item.end_date);
+    }
+  }
+  return Array.from(dateSet).sort();
+}
 function overlapsRange(itemStart,itemEnd,filterStart,filterEnd){const s=parseDateOrNull(itemStart), e=parseDateOrNull(itemEnd||itemStart);if(!filterStart&&!filterEnd)return true;if(!s&&!e)return false;const a=s||e,b=e||s;if(filterStart&&b<filterStart)return false;if(filterEnd&&a>filterEnd)return false;return true;}
 const polygonLayers=[], spaceportLayers=[]; let availableSliderDates=[];
 function shiftedCoords(coords, deltaLon){
@@ -115,11 +126,40 @@ for(const sp of spaceportData){
     spaceportLayers.push(marker);
   }
 }
-function initializeDateInputs(){const starts=polygonData.map(i=>i.start_date).filter(s=>s&&!isNaN(new Date(s+"T00:00:00Z").getTime()));const ends=polygonData.map(i=>i.end_date||i.start_date).filter(s=>s&&!isNaN(new Date(s+"T00:00:00Z").getTime()));if(starts.length>0&&ends.length>0){starts.sort();ends.sort();const minDate=starts[0],maxDate=ends[ends.length-1];document.getElementById("startDate").min=minDate;document.getElementById("startDate").max=maxDate;document.getElementById("endDate").min=minDate;document.getElementById("endDate").max=maxDate;availableSliderDates=daysBetweenInclusive(parseDateOrNull(minDate),parseDateOrNull(maxDate));const slider=document.getElementById("timeSlider");slider.min=0;slider.max=Math.max(availableSliderDates.length-1,0);slider.value=0;slider.disabled=availableSliderDates.length===0;updateTimeSliderLabel();slider.addEventListener("input",updateTimeSliderLabel);}}
-function updateTimeSliderLabel(){if(!availableSliderDates||availableSliderDates.length===0){document.getElementById("timeSliderLabel").innerText="No date data";return;}document.getElementById("timeSliderLabel").innerText="Selected: "+availableSliderDates[Number(document.getElementById("timeSlider").value)];}
+function initializeDateInputs(){
+  const starts=polygonData.map(i=>i.start_date).filter(s=>s&&!isNaN(new Date(s+"T00:00:00Z").getTime()));
+  const ends=polygonData.map(i=>i.end_date||i.start_date).filter(s=>s&&!isNaN(new Date(s+"T00:00:00Z").getTime()));
+
+  if(starts.length>0&&ends.length>0){
+    starts.sort();
+    ends.sort();
+    const minDate=starts[0],maxDate=ends[ends.length-1];
+    document.getElementById("startDate").min=minDate;
+    document.getElementById("startDate").max=maxDate;
+    document.getElementById("endDate").min=minDate;
+    document.getElementById("endDate").max=maxDate;
+  }
+
+  availableSliderDates=collectAvailableDataDates();
+  const slider=document.getElementById("timeSlider");
+  slider.min=0;
+  slider.max=Math.max(availableSliderDates.length-1,0);
+  slider.value=0;
+  slider.disabled=availableSliderDates.length===0;
+  updateTimeSliderLabel();
+  slider.addEventListener("input",updateTimeSliderLabel);
+}
+function updateTimeSliderLabel(){
+  if(!availableSliderDates||availableSliderDates.length===0){
+    document.getElementById("timeSliderLabel").innerText="No date data";
+    return;
+  }
+  const idx=Number(document.getElementById("timeSlider").value);
+  document.getElementById("timeSliderLabel").innerText="Data date: "+availableSliderDates[idx]+" ("+(idx+1)+" / "+availableSliderDates.length+")";
+}
 function applyTimeSlider(){if(!availableSliderDates||availableSliderDates.length===0)return;const d=availableSliderDates[Number(document.getElementById("timeSlider").value)];document.getElementById("startDate").value=d;document.getElementById("endDate").value=d;applyFilters();}
-function applyFilters(){const fs=parseDateOrNull(document.getElementById("startDate").value),fe=parseDateOrNull(document.getElementById("endDate").value),wid=document.getElementById("warningIdFilter").value.trim().toLowerCase(),showRocket=document.getElementById("typeRocket").checked,showDebris=document.getElementById("typeDebris").checked,enableArea=document.getElementById("enableAreaFilter").checked,maxArea=Number(document.getElementById("maxAreaKm2").value);let count=0;for(const group of polygonGroups){const item=group.meta;let show=true;if(item.warning_type==="ROCKET"&&!showRocket)show=false;if(item.warning_type==="SPACE_DEBRIS"&&!showDebris)show=false;if(wid&&!String(item.warning_id).toLowerCase().includes(wid))show=false;if(enableArea&&!isNaN(maxArea)&&maxArea>=0&&Number(item.area_km2||0)>maxArea)show=false;if(!overlapsRange(item.start_date,item.end_date,fs,fe))show=false;if(show){for(const layer of group.layers){if(!map.hasLayer(layer))layer.addTo(map);}count++;}else{for(const layer of group.layers){if(map.hasLayer(layer))map.removeLayer(layer);}}}document.getElementById("visibleCount").innerText="Visible polygons: "+count+" / "+polygonGroups.length;setTimeout(()=>map.invalidateSize(),100);}
-function resetFilters(){document.getElementById("startDate").value="";document.getElementById("endDate").value="";document.getElementById("warningIdFilter").value="";document.getElementById("maxAreaKm2").value="1000000";document.getElementById("enableAreaFilter").checked=true;document.getElementById("typeRocket").checked=true;document.getElementById("typeDebris").checked=true;if(availableSliderDates&&availableSliderDates.length>0){document.getElementById("timeSlider").value=0;updateTimeSliderLabel();}applyFilters();}
+function applyFilters(){const fs=parseDateOrNull(document.getElementById("startDate").value),fe=parseDateOrNull(document.getElementById("endDate").value),wid=document.getElementById("warningIdFilter").value.trim().toLowerCase(),enableArea=document.getElementById("enableAreaFilter").checked,maxArea=Number(document.getElementById("maxAreaKm2").value);let count=0;for(const group of polygonGroups){const item=group.meta;let show=true;if(wid&&!String(item.warning_id).toLowerCase().includes(wid))show=false;if(enableArea&&!isNaN(maxArea)&&maxArea>=0&&Number(item.area_km2||0)>maxArea)show=false;if(!overlapsRange(item.start_date,item.end_date,fs,fe))show=false;if(show){for(const layer of group.layers){if(!map.hasLayer(layer))layer.addTo(map);}count++;}else{for(const layer of group.layers){if(map.hasLayer(layer))map.removeLayer(layer);}}}document.getElementById("visibleCount").innerText="Visible polygons: "+count+" / "+polygonGroups.length;setTimeout(()=>map.invalidateSize(),100);}
+function resetFilters(){document.getElementById("startDate").value="";document.getElementById("endDate").value="";document.getElementById("warningIdFilter").value="";document.getElementById("maxAreaKm2").value="1000000";document.getElementById("enableAreaFilter").checked=true;if(availableSliderDates&&availableSliderDates.length>0){document.getElementById("timeSlider").value=0;updateTimeSliderLabel();}applyFilters();}
 function setupShortcuts(){for(const id of ["warningIdFilter","maxAreaKm2"]){document.getElementById(id).addEventListener("keydown",e=>{if(e.key==="Enter")applyFilters();});}}
 initializeDateInputs();setupShortcuts();applyFilters();
 window.addEventListener("resize",()=>setTimeout(()=>map.invalidateSize(),150));
