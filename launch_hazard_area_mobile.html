@@ -48,14 +48,15 @@ input[type="range"]{width:100%;}.chips{display:flex;gap:8px;flex-wrap:wrap;}
 <div class="sheet-handle" onclick="toggleFilterSheet()"></div>
 <div class="sheet-header"><div class="sheet-title">Filter</div><button class="secondary-button" onclick="hideFilterSheet()">Close</button></div>
 <div class="sheet-body">
-<div class="section"><div class="section-title">Time</div>
-<div class="filter-row"><label for="startDate">Start date</label><input type="date" id="startDate"></div>
-<div class="filter-row"><label for="endDate">End date</label><input type="date" id="endDate"></div>
-<div class="filter-row"><label for="timeSlider">Time slider</label><input type="range" id="timeSlider" min="0" max="0" value="0"><div id="timeSliderLabel" class="hint">No date data</div><button class="secondary-button" type="button" onclick="applyTimeSlider()">Show selected data date</button></div></div>
-<div class="section"><div class="section-title">Search by Warning ID</div>
+<div class="section"><div class="section-title">Time slider</div>
+<div class="filter-row"><input type="range" id="timeSlider" min="0" max="0" value="0"><div id="timeSliderLabel" class="hint">Selected: No date data</div><button class="secondary-button" type="button" onclick="applyTimeSlider()">Show selected day</button></div></div>
+
+<div class="section"><div class="section-title">Filter</div>
+<div class="filter-row"><label for="startDate">Period start</label><input type="date" id="startDate"></div>
+<div class="filter-row"><label for="endDate">Period end</label><input type="date" id="endDate"></div>
 <div class="filter-row"><label for="warningIdFilter">Warning ID</label><input type="text" id="warningIdFilter" placeholder="例: 23-0419 または 0419"></div>
+<div class="filter-row"><label for="maxAreaKm2">Max Polygon Area (km²)</label><input type="number" id="maxAreaKm2" value="1000000" min="0" step="100000"><label class="chip" style="margin-top: 8px;"><input type="checkbox" id="enableAreaFilter" checked> Hide over limit</label></div>
 </div>
-<div class="section"><div class="section-title">Area guard</div><div class="filter-row"><label for="maxAreaKm2">Max polygon area (km²)</label><input type="number" id="maxAreaKm2" value="1000000" min="0" step="100000"><label class="chip" style="margin-top: 8px;"><input type="checkbox" id="enableAreaFilter" checked> Hide over limit</label></div></div>
 <div class="button-row"><button class="primary-button" onclick="applyFilters()">Apply</button><button class="secondary-button" onclick="resetFilters()">Reset</button></div>
 <div class="count" id="visibleCount"></div><div class="hint">Map display: Leaflet / OSM. Area values: Equal Earth projection. Time slider selects only dates that exist in the data.</div>
 </div></div>
@@ -151,11 +152,11 @@ function initializeDateInputs(){
 }
 function updateTimeSliderLabel(){
   if(!availableSliderDates||availableSliderDates.length===0){
-    document.getElementById("timeSliderLabel").innerText="No date data";
+    document.getElementById("timeSliderLabel").innerText="Selected: No date data";
     return;
   }
   const idx=Number(document.getElementById("timeSlider").value);
-  document.getElementById("timeSliderLabel").innerText="Data date: "+availableSliderDates[idx]+" ("+(idx+1)+" / "+availableSliderDates.length+")";
+  document.getElementById("timeSliderLabel").innerText="Selected: "+availableSliderDates[idx]+" ("+(idx+1)+" / "+availableSliderDates.length+")";
 }
 function applyTimeSlider(){if(!availableSliderDates||availableSliderDates.length===0)return;const d=availableSliderDates[Number(document.getElementById("timeSlider").value)];document.getElementById("startDate").value=d;document.getElementById("endDate").value=d;applyFilters();}
 function applyFilters(){const fs=parseDateOrNull(document.getElementById("startDate").value),fe=parseDateOrNull(document.getElementById("endDate").value),wid=document.getElementById("warningIdFilter").value.trim().toLowerCase(),enableArea=document.getElementById("enableAreaFilter").checked,maxArea=Number(document.getElementById("maxAreaKm2").value);let count=0;for(const group of polygonGroups){const item=group.meta;let show=true;if(wid&&!String(item.warning_id).toLowerCase().includes(wid))show=false;if(enableArea&&!isNaN(maxArea)&&maxArea>=0&&Number(item.area_km2||0)>maxArea)show=false;if(!overlapsRange(item.start_date,item.end_date,fs,fe))show=false;if(show){for(const layer of group.layers){if(!map.hasLayer(layer))layer.addTo(map);}count++;}else{for(const layer of group.layers){if(map.hasLayer(layer))map.removeLayer(layer);}}}document.getElementById("visibleCount").innerText="Visible polygons: "+count+" / "+polygonGroups.length;setTimeout(()=>map.invalidateSize(),100);}
