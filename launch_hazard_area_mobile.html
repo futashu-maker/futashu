@@ -58,7 +58,7 @@ input[type="range"]{width:100%;}.chips{display:flex;gap:8px;flex-wrap:wrap;}
 <div class="filter-row"><label for="maxAreaKm2">Max Polygon Area (km²)</label><input type="number" id="maxAreaKm2" value="1000000" min="0" step="100000"><label class="chip" style="margin-top: 8px;"><input type="checkbox" id="enableAreaFilter" checked> Hide over limit</label></div>
 </div>
 <div class="button-row"><button class="primary-button" onclick="applyFilters()">Apply</button><button class="secondary-button" onclick="resetFilters()">Reset</button></div>
-<div class="count" id="visibleCount"></div><div class="hint">Map display: Leaflet / OSM. Area values: Equal Earth projection. Time slider selects only dates that exist in the data.</div>
+<div class="count" id="visibleCount"></div><div class="hint">Map display: Leaflet / OSM with latitude/longitude grid. Area values: Equal Earth projection. Time slider selects only dates that exist in the data.</div>
 </div></div>
 
 <div id="detailSheet" class="bottom-sheet detail-sheet">
@@ -76,6 +76,21 @@ if (typeof L === "undefined") {
 const map=L.map('map',{zoomControl:false,preferCanvas:true,worldCopyJump:false,attributionControl:true}).setView([20,140],2);
 L.control.zoom({position:'bottomright'}).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:12,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+
+function addGraticule(){
+  const style = {color:"#334155", weight:0.8, opacity:0.38, interactive:false};
+  for(let lat=-80; lat<=80; lat+=10){
+    const pts=[];
+    for(let lon=-360; lon<=360; lon+=5){ pts.push([lat, lon]); }
+    L.polyline(pts, style).addTo(map);
+  }
+  for(let lon=-360; lon<=360; lon+=10){
+    const pts=[];
+    for(let lat=-85; lat<=85; lat+=5){ pts.push([lat, lon]); }
+    L.polyline(pts, style).addTo(map);
+  }
+}
+addGraticule();
 const filterSheet=document.getElementById("filterSheet"), detailSheet=document.getElementById("detailSheet"), filterButton=document.getElementById("filterButton"), detailDiv=document.getElementById("detail");
 
 function showFilterSheet(){detailSheet.classList.remove("open");filterSheet.classList.add("open");filterButton.innerText="Close";setTimeout(()=>map.invalidateSize(),240);}
